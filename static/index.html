@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>家具入户推演台</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- ============ 顶栏 ============ -->
+  <header id="topbar">
+    <div class="brand">🛋️ 家具入户推演台</div>
+    <div class="scheme-area">
+      <input id="schemeName" type="text" value="我的合租房方案" maxlength="60">
+      <select id="schemeList" title="读取已保存方案"></select>
+      <button id="btnNew" class="ghost">新建空白</button>
+      <button id="btnSave" class="primary">保存方案</button>
+      <button id="btnLoadDemo" class="ghost">载入示例户型</button>
+      <span id="saveHint" class="hint"></span>
+    </div>
+    <div class="mode-tabs">
+      <button data-mode="plan" class="tab active">① 户型</button>
+      <button data-mode="furn" class="tab">② 家具/路线</button>
+      <button data-mode="layout" class="tab">③ 摆放优化</button>
+    </div>
+  </header>
+
+  <div id="main">
+    <!-- ============ 左工具条 ============ -->
+    <aside id="toolrail">
+      <div class="rail-group" data-show="plan">
+        <div class="rail-title">绘制</div>
+        <button class="tool" data-tool="select">↖ 选择/拖动</button>
+        <button class="tool" data-tool="room">▱ 房间/走廊</button>
+        <button class="tool" data-tool="door">🚪 门洞</button>
+        <button class="tool" data-tool="obstacle">▣ 固定障碍</button>
+        <button class="tool" data-tool="delete">✕ 删除</button>
+        <div class="rail-title">视图</div>
+        <button class="tool" id="btnGrid">▦ 标尺网格</button>
+        <button class="tool" id="btnFit">⤢ 适配视图</button>
+      </div>
+      <div class="rail-group" data-show="furn">
+        <div class="rail-title">搬运</div>
+        <button class="tool" data-tool="select">↖ 拖姿态</button>
+        <button class="tool" data-tool="pose">＋ 关键姿态</button>
+        <button class="tool" id="btnPlay">▶ 播放路线</button>
+        <button class="tool" id="btnStop">■ 停止</button>
+      </div>
+    </aside>
+
+    <!-- ============ 画布 ============ -->
+    <section id="stage">
+      <svg id="svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="gridSmall" width="100" height="100" patternUnits="userSpaceOnUse">
+            <path d="M100 0H0V100" fill="none" stroke="#dfe6ee" stroke-width="0.6"/>
+          </pattern>
+          <pattern id="gridBig" width="1000" height="1000" patternUnits="userSpaceOnUse">
+            <rect width="1000" height="1000" fill="url(#gridSmall)"/>
+            <path d="M1000 0H0V1000" fill="none" stroke="#c3cfdc" stroke-width="1"/>
+          </pattern>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5"
+                  markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+          </marker>
+        </defs>
+        <g id="view">
+          <rect id="gridRect" x="-50000" y="-50000" width="100000" height="100000"
+                fill="url(#gridBig)"/>
+          <g id="layerSpace"></g>
+          <g id="layerRuler"></g>
+          <g id="layerDoor"></g>
+          <g id="layerObstacle"></g>
+          <g id="layerFurniture"></g>
+          <g id="layerUsage"></g>
+          <g id="layerRoute"></g>
+          <g id="layerLayout"></g>
+          <g id="layerOverlay"></g>
+        </g>
+      </svg>
+      <div id="coordReadout" class="readout"></div>
+      <div id="scaleLegend" class="readout legend"></div>
+      <div id="modeHint" class="mode-hint"></div>
+    </section>
+
+    <!-- ============ 右侧属性面板 ============ -->
+    <aside id="sidebar">
+      <!-- 户型模式 -->
+      <div class="panel" data-panel="plan">
+        <h3>户型要素</h3>
+        <div id="propBody" class="prop-body">
+          <p class="muted">在画布上画房间/走廊，再沿墙放置门洞。<br>
+          点击任一要素可在此编辑尺寸。</p>
+        </div>
+        <div class="prop-form" id="spaceForm" hidden>
+          <label>名称 <input id="spName"></label>
+          <label>净高 (mm) <input id="spHeight" type="number" min="2000" max="4000" step="10"></label>
+          <div class="hint" id="spaceDims"></div>
+        </div>
+        <div class="prop-form" id="doorForm" hidden>
+          <label>名称 <input id="drName"></label>
+          <label>门洞净宽 (mm) <input id="drWidth" type="number" min="500" max="1500" step="10"></label>
+          <label>门楣净高 (mm) <input id="drClear" type="number" min="1800" max="3000" step="10"></label>
+          <label>最大开启角 (°)
+            <input id="drOpen" type="range" min="60" max="180" step="5">
+            <span id="drOpenVal"></span></label>
+          <label>开启侧
+            <select id="drSwing"><option value="1">法线侧</option><option value="-1">另一侧</option></select>
+          </label>
+          <button id="drFlip" class="small" type="button" style="width:100%">↔ 翻转开启侧</button>
+          <div class="hint">蓝色扇形即门扇开启扫掠范围。</div>
+        </div>
+        <div class="prop-form" id="obstacleForm" hidden>
+          <label>名称 <input id="obName"></label>
+          <label>宽 (mm) <input id="obW" type="number" step="10"></label>
+          <label>深 (mm) <input id="obD" type="number" step="10"></label>
+          <label>高 (mm) <input id="obH" type="number" step="10"></label>
+          <label>旋转 (°)
+            <input id="obDeg" type="range" min="0" max="90" step="5">
+            <span id="obDegVal"></span></label>
+        </div>
+      </div>
+
+      <!-- 家具/路线模式 -->
+      <div class="panel" data-panel="furn" hidden>
+        <h3>家具清单</h3>
+        <div class="formline">
+          <input id="fName" placeholder="名称，如 双门衣柜">
+        </div>
+        <div class="formgrid">
+          <label>长<input id="fW" type="number" value="1000" min="100" step="10"></label>
+          <label>宽<input id="fD" type="number" value="600" min="100" step="10"></label>
+          <label>高<input id="fH" type="number" value="2000" min="100" step="10"></label>
+        </div>
+        <button id="btnAddFurn" class="primary small">＋ 添加家具</button>
+        <ul id="furnList" class="furn-list"></ul>
+
+        <h3 id="routeTitle">搬运路线</h3>
+        <div id="routeControls">
+          <div class="formgrid">
+            <label>当前抬起角 (°)
+              <input id="posePitch" type="range" min="0" max="80" step="5" value="0">
+            </label>
+          </div>
+          <div class="hint" id="pitchVal">水平搬运，有效高 = 家具高</div>
+          <div id="poseList" class="pose-list"></div>
+        </div>
+
+        <h3>使用包络（入室后）</h3>
+        <div id="usageControls" class="usage-box">
+          <label class="chk"><input type="checkbox" id="ugDoor"> 柜门</label>
+          <div id="ugDoorBox" class="sub" hidden>
+            <label>所在边
+              <select id="ugDoorEdge">
+                <option value="front">前面</option><option value="back">后面</option>
+                <option value="left">左面</option><option value="right">右面</option>
+              </select></label>
+            <label>开启角 <input id="ugDoorOpen" type="number" value="90" min="0" max="180"></label>
+            <label>伸手深度 <input id="ugDoorReach" type="number" value="600" min="0" step="50"></label>
+          </div>
+          <label class="chk"><input type="checkbox" id="ugDrawer"> 抽屉</label>
+          <div id="ugDrawerBox" class="sub" hidden>
+            <label>所在边
+              <select id="ugDrawerEdge">
+                <option value="front">前面</option><option value="back">后面</option>
+                <option value="left">左面</option><option value="right">右面</option>
+              </select></label>
+            <label>拉开深度 <input id="ugDrawerReach" type="number" value="700" min="0" step="50"></label>
+          </div>
+          <label class="chk"><input type="checkbox" id="ugChair"> 椅子入座空间</label>
+          <div id="ugChairBox" class="sub" hidden>
+            <label>入座间隙 <input id="ugChairReach" type="number" value="300" min="0" step="50"></label>
+            <label>椅深 <input id="ugChairSeat" type="number" value="500" min="0" step="50"></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 摆放优化模式 -->
+      <div class="panel" data-panel="layout" hidden>
+        <h3>摆放优化</h3>
+        <p class="muted">勾选锁定的物件（如床），系统只调整其余家具，
+        按 <b>可达性 → 通行余量 → 转向次数 → 紧凑度</b> 排序。</p>
+        <label>入户门
+          <select id="entryDoor"></select></label>
+        <ul id="lockList" class="furn-list"></ul>
+        <button id="btnOptimize" class="primary">⇪ 生成摆放方案</button>
+        <div id="optStatus" class="hint"></div>
+        <div id="optResults"></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- 冲突提示条 -->
+  <div id="conflictBar" class="conflict-bar" hidden>
+    <span id="conflictIcon">⚠️</span>
+    <div class="conflict-body">
+      <div id="conflictTitle"></div>
+      <div id="conflictDetail" class="hint"></div>
+    </div>
+    <button id="conflictClose">✕</button>
+  </div>
+</div>
+<script src="/js/svg-editor.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>
